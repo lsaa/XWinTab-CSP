@@ -467,9 +467,11 @@ static BOOL load_xwintab() {
             DeviceInfo *device = pGetSelectedDevice();
             if (device) {
                 g_deviceInfo = *device;
+                log_strf("Using device: %d\n", g_deviceInfo.id);
                 return TRUE;
             }
             g_deviceInfo.id = -1;
+            log_strf("Couldn't find suitable tablet device\n");
         }
         pShutdown();
     }
