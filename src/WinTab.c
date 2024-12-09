@@ -356,6 +356,14 @@ static void WINAPI on_event(EventInfo *ev) {
     BOOL is_proximity = ev->type == kEventTypeProximityIn ||
                         ev->type == kEventTypeProximityOut;
 
+    // Sometimes the stylus may already be in proximity by the time we are
+    // loaded and some drivers don't emit proximity events at all.
+    if (g_deviceInfo.id != -1 && !g_context.inProximity && !is_proximity) {
+        log_strf("on_event: Converting normal event to proximity event\n");
+        ev->type = kEventTypeProximityIn;
+        is_proximity = TRUE;
+    }
+
     if (!g_context.enabled && (!is_proximity || g_deviceInfo.id == -1)) {
         log_strf("on_event: rejecting %d\n", ev->type);
         LeaveCriticalSection(&g_lock);
