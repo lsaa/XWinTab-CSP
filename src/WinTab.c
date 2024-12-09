@@ -449,8 +449,10 @@ static BOOL load_xwintab() {
     g_deviceInfo.id = -1;
     g_didInit = TRUE;
     g_module = LoadLibraryW(L"XWinTabHelper.dll.so");
-    if (!g_module)
+    if (!g_module) {
+        log_strf("Failed to load XWinTabHelper.dll.so\n");
         return FALSE;
+    }
 
     log_strf("Loaded XWinTabHelper.dll.so\n");
 
@@ -462,6 +464,7 @@ static BOOL load_xwintab() {
 
     if (pLoad && pGetSelectedDevice && pBeginEvents && pCheckEvents && pShutdown) {
         log_strf("Loaded funcs\n");
+
         if (pLoad()) {
             log_strf("Load() call succeeded\n");
             DeviceInfo *device = pGetSelectedDevice();
@@ -473,8 +476,13 @@ static BOOL load_xwintab() {
             g_deviceInfo.id = -1;
             log_strf("Couldn't find suitable tablet device\n");
         }
+        else
+            log_strf("Load() call failed\n");
+
         pShutdown();
     }
+    else
+        log_strf("Failed to load funcs\n");
 
     FreeLibrary(g_module);
     g_module = NULL;
