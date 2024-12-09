@@ -9,6 +9,8 @@ Requirements
 ------------
 A Wacom compatible tablet that works in native Linux applications. The tablet needs to have a device with the word "stylus" in its name.
 
+This uses the ``libxcb.so.1`` and ``libxcb-xinput.so.0`` libraries. On Debian/Ubuntu distributions, these can be obtained by installing the ``libxcb-xinput0`` package.
+
 Installation
 ------------
 1. With Rebelle already installed, copy **BOTH** ``wintab32.dll`` and ``XWinTabHelper.dll.so`` into the installation directory (the one with the ``Rebelle 7.exe``).
