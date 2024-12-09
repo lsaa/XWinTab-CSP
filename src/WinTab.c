@@ -71,7 +71,7 @@ static int (WINAPI *pShutdown)(void);
 
 #define XWINTAB_VERSION_STRINGIFY(S) #S
 #define XWINTAB_VERSION_MAJOR 0
-#define XWINTAB_VERSION_MINOR 1
+#define XWINTAB_VERSION_MINOR 2
 #define XWINTAB_NAME(MA,MI) "XWinTab " XWINTAB_VERSION_STRINGIFY(MA) "." \
                                        XWINTAB_VERSION_STRINGIFY(MI)
 
