@@ -528,8 +528,8 @@ static void init_log_context(LPLOGCONTEXTW lctx) {
     } else {
         lctx->lcInOrgX = g_deviceInfo.xAxis.min;
         lctx->lcInOrgY = g_deviceInfo.yAxis.min;
-        lctx->lcInExtX = g_deviceInfo.xAxis.max;
-        lctx->lcInExtY = g_deviceInfo.yAxis.max;
+        lctx->lcInExtX = g_deviceInfo.xAxis.max - g_deviceInfo.xAxis.min;
+        lctx->lcInExtY = g_deviceInfo.yAxis.max - g_deviceInfo.yAxis.min;
     }
 
     lctx->lcSensX = 65536;
@@ -537,8 +537,8 @@ static void init_log_context(LPLOGCONTEXTW lctx) {
     lctx->lcSensZ = 65536;
     lctx->lcSysMode = 0;
 
-    lctx->lcSysOrgX = lctx->lcOutOrgX = 0;
-    lctx->lcSysOrgY = lctx->lcOutOrgY = 0;
+    lctx->lcSysOrgX = lctx->lcOutOrgX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    lctx->lcSysOrgY = lctx->lcOutOrgY = GetSystemMetrics(SM_YVIRTUALSCREEN);
     lctx->lcSysExtX = lctx->lcOutExtX = GetSystemMetrics(SM_CXVIRTUALSCREEN);
     lctx->lcSysExtY = lctx->lcOutExtY = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 
