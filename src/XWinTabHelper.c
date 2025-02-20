@@ -278,7 +278,7 @@ static int check_device(const xcb_input_device_info_t *device,
         device->device_use != XCB_INPUT_DEVICE_USE_IS_X_EXTENSION_POINTER)
         return 0;
 
-    if (!match_token(name, "stylus"))
+    if (!match_token(name, "stylus") && !match_token(name, "pen"))
         return 0;
 
     int class_count = device->num_class_info;
