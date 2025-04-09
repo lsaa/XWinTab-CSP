@@ -11,6 +11,8 @@ A Wacom compatible tablet that works in native Linux applications. The tablet ne
 
 This uses the ``libxcb.so.1`` and ``libxcb-xinput.so.0`` libraries. On Debian/Ubuntu distributions, these can be obtained by installing the ``libxcb-xinput0`` package.
 
+To build it yourself, you will also need to install the following packages: ``libxcb-xinput-dev``, ``wine64-tools``, and ``gcc-mingw-w64``.
+
 Installation
 ------------
 1. With Rebelle already installed, copy **BOTH** ``wintab32.dll`` and ``XWinTabHelper.dll.so`` into the installation directory (the one with the ``Rebelle 7.exe``).
