@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdio.h>
 #include <windef.h>
 
 // WineGCC defines _WIN32 for us to use any windows headers but XCB has
@@ -278,7 +279,7 @@ static int check_device(const xcb_input_device_info_t *device,
         device->device_use != XCB_INPUT_DEVICE_USE_IS_X_EXTENSION_POINTER)
         return 0;
 
-    if (!match_token(name, "stylus") && !match_token(name, "pen"))
+    if (!match_token(name, "stylus") && !match_token(name, "pen") && !match_token(name, "artist tablet"))
         return 0;
 
     int class_count = device->num_class_info;

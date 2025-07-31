@@ -148,13 +148,13 @@ static void close_log() {
 //
 
 static BOOL queue_init(PacketQueue *queue) {
-    queue->buffer = (PacketData *) malloc(sizeof(PacketData) * 128);
+    queue->buffer = (PacketData *) malloc(sizeof(PacketData) * 2048);
 
     if (!queue->buffer)
         return FALSE;
 
     queue->count = 0;
-    queue->size = 128;
+    queue->size = 2048;
     queue->nextRead = 0;
     queue->nextWrite = 0;
 
@@ -230,12 +230,13 @@ static BOOL queue_resize(PacketQueue *queue, int size) {
     if (n > new_count)
         n = new_count;
 
-    memcpy(resized, &queue->buffer[queue->nextRead], n);
+    memcpy(resized, &queue->buffer[queue->nextRead], n * sizeof(PacketData));
     copied = n;
 
     if (copied != new_count) {
         n = new_count - copied;
-        memcpy(&resized[copied], queue->buffer, n);
+        // Correctly copy the number of bytes for the wrapped-around portion
+        memcpy(&resized[copied], queue->buffer, n * sizeof(PacketData));
     }
 
     free(queue->buffer);
@@ -353,6 +354,20 @@ static void WINAPI on_event(EventInfo *ev) {
 
     EnterCriticalSection(&g_lock);
 
+    if (ev->type == kEventTypeMotionNotify
+        && ev->pressure == 0
+        && g_context.inProximity)
+    {
+        g_context.inProximity = FALSE;
+        // send WT_PROXIMITY(FALSE)
+        context_message(&g_context,
+                        XWT_PROXIMITY,
+                        (WPARAM)g_context.handle,
+                        MAKELPARAM(FALSE, 1));
+        LeaveCriticalSection(&g_lock);
+        return;
+    }
+
     BOOL is_proximity = ev->type == kEventTypeProximityIn ||
                         ev->type == kEventTypeProximityOut;
 
@@ -453,6 +468,11 @@ static DWORD WINAPI thread_func(void *userdata) {
 //
 
 static BOOL load_xwintab() {
+    WCHAR wbuffer[MAX_PATH];
+    DWORD result = GetEnvironmentVariableW(L"LOADED_MESSAGE", wbuffer, MAX_PATH);
+    if (result)
+        err_dlg(L"XWinTab-CSP was injected successfully!");
+
     InitializeCriticalSection(&g_lock);
     g_deviceInfo.id = -1;
     g_didInit = TRUE;
@@ -622,6 +642,9 @@ BOOL WINAPI WTClose(HCTX ctx) {
         WaitForSingleObject(g_thread, INFINITE);
         g_thread = NULL;
         g_threadStop = FALSE;
+        queue_free(&g_context.queue);    
+        g_context.handle   = 0;         
+        g_context.inProximity = FALSE;   
         pShutdown();
         g_deviceInfo.id = -1;
         g_context.enabled = FALSE;
@@ -634,6 +657,56 @@ BOOL WINAPI WTClose(HCTX ctx) {
 UINT WINAPI WTInfoW(UINT cat, UINT idx, LPVOID ptr) {
     if (!g_didInit)
         load_xwintab();
+
+    if ((cat == WTI_DEVICES || cat == 0) && idx == 0) {
+        log_strf("WTInfoW: Answering request for device X/Y axis info (cat: %u, idx: %u)\n", cat, idx);
+        if (ptr) {
+            LPAXIS out = (LPAXIS) ptr;
+            if (g_deviceInfo.id != -1) {
+                out[0].axMin = g_deviceInfo.xAxis.min;
+                out[0].axMax = g_deviceInfo.xAxis.max;
+                out[0].axResolution = g_deviceInfo.xAxis.resolution;
+                out[0].axUnits = TU_INCHES;
+
+                out[1].axMin = g_deviceInfo.yAxis.min;
+                out[1].axMax = g_deviceInfo.yAxis.max;
+                out[1].axResolution = g_deviceInfo.yAxis.resolution;
+                out[1].axUnits = TU_INCHES;
+            } else {
+                out[0].axMin = 0;
+                out[0].axMax = 1024;
+                out[0].axResolution = 1;
+                out[0].axUnits = TU_INCHES;
+
+                out[1].axMin = 0;
+                out[1].axMax = 1024;
+                out[1].axResolution = 1;
+                out[1].axUnits = TU_INCHES;
+            }
+        }
+        return sizeof(AXIS) * 2;
+    }
+
+
+    if (cat == WTI_DEVICES && idx == 1) {
+        log_strf("WTInfoW: Reporting Y axis min=%d, max=%d\n",
+             g_deviceInfo.id != -1 ? g_deviceInfo.yAxis.min : 0,
+             g_deviceInfo.id != -1 ? g_deviceInfo.yAxis.max : 1024);
+        if (ptr) {
+            LPAXIS out = (LPAXIS) ptr;
+            if (g_deviceInfo.id != -1) {
+                out->axMin        = g_deviceInfo.yAxis.min;
+                out->axMax        = g_deviceInfo.yAxis.max;
+                out->axResolution = g_deviceInfo.yAxis.resolution;
+            } else {
+                out->axMin        = 0;
+                out->axMax        = 1024;
+                out->axResolution = 1;
+            }
+            out->axUnits = TU_INCHES;
+        }
+        return sizeof(AXIS);
+    }
 
     if ((cat == WTI_DEFCONTEXT || cat == WTI_DEFSYSCTX) && !idx) {
         log_strf("WTInfoW: Request for default logcontext\n");
@@ -664,6 +737,9 @@ UINT WINAPI WTInfoW(UINT cat, UINT idx, LPVOID ptr) {
     }
 
     if (cat == WTI_DEVICES && idx == DVC_NPRESSURE) {
+        log_strf("WTInfoW: Reporting pressure axis min=%d, max=%d\n",
+             g_deviceInfo.id != -1 ? g_deviceInfo.pressureAxis.min : 0,
+             g_deviceInfo.id != -1 ? g_deviceInfo.pressureAxis.max : 1024);
         if (ptr) {
             LPAXIS out = (LPAXIS) ptr;
             if (g_deviceInfo.id != -1) {
@@ -795,10 +871,17 @@ typedef struct PktPeekIterData {
     char *dst;
 } PktPeekIterData;
 
+
 static BOOL pkt_peek_itr(PacketData *pkt, void *userData) {
-    PktPeekIterData *data = (PktPeekIterData *) data;
-    data->dst += packet_copy(&g_context, pkt, data->dst);
+    // Correctly cast the incoming userData pointer
+    PktPeekIterData *data = (PktPeekIterData *) userData;
+
+    // Now that 'data' is valid, the rest of the function works correctly
+    if (data->dst) {
+        data->dst += packet_copy(&g_context, pkt, data->dst);
+    }
     data->read++;
+
     return data->read < data->count;
 }
 
@@ -847,14 +930,110 @@ BOOL WINAPI WTQueueSizeSet(HCTX ctx, int size) {
     return result;
 }
 
+// BOOL APIENTRY DllMain(HMODULE hModule, DWORD  reason, LPVOID lpReserved) {
+//     if (reason == DLL_PROCESS_DETACH) {
+//         close_log();
+//         return TRUE;
+//     }
+//     if (reason == DLL_PROCESS_ATTACH) {
+//         init_log();
+//         return TRUE;
+//     }
+//     return FALSE;
+// }
+//
+//
+
+// Helper to find a packet by serial in the queue (must be called under g_lock)
+static PacketData* find_packet_by_serial(PacketQueue *queue, UINT serial) {
+    if (!queue->count)
+        return NULL;
+
+    int pos = queue->nextRead;
+    for (int i = 0; i < queue->count; i++) {
+        PacketData *pkt = &queue->buffer[pos];
+        if (pkt->pkSerialNumber == serial)
+            return pkt;
+        pos = (pos + 1) % queue->size;
+    }
+    return NULL;
+}
+
+BOOL WINAPI WTPacket(HCTX ctx, UINT serial, LPVOID pktOut) {
+    if (!ctx || g_context.handle != ctx)
+        return FALSE;
+
+    EnterCriticalSection(&g_lock);
+
+    BOOL found = FALSE;
+    int packets_to_consume = 0;
+
+    // Stage 1: Search for the packet without modifying the queue.
+    if (g_context.queue.count > 0) {
+        int search_pos = g_context.queue.nextRead;
+        for (int i = 0; i < g_context.queue.count; i++) {
+            packets_to_consume++;
+            PacketData *pkt = &g_context.queue.buffer[search_pos];
+
+            if (pkt->pkSerialNumber == serial) {
+                found = TRUE;
+                if (pktOut) {
+                    packet_copy(&g_context, pkt, pktOut);
+                }
+                break;
+            }
+            search_pos = (search_pos + 1) % g_context.queue.size;
+        }
+    }
+
+    // Stage 2: If found, consume all packets up to and including the target.
+    // If not found, the queue remains untouched.
+    if (found) {
+        for (int i = 0; i < packets_to_consume; i++) {
+            // This simply advances the read pointer and decrements the count.
+            queue_read(&g_context.queue);
+        }
+    }
+
+    LeaveCriticalSection(&g_lock);
+    return found;
+}
+
+BOOL WINAPI WTQueuePacketsEx(HCTX ctx, UINT *pBegin, UINT *pEnd) {
+    if (!ctx || g_context.handle != ctx || !pBegin || !pEnd)
+        return FALSE;
+
+    EnterCriticalSection(&g_lock);
+
+    if (g_context.queue.count == 0) {
+        *pBegin = *pEnd = 0;
+    } else {
+        PacketData *first = &g_context.queue.buffer[g_context.queue.nextRead];
+        int lastIdx = (g_context.queue.nextWrite + g_context.queue.size - 1)
+                      % g_context.queue.size;
+        PacketData *last = &g_context.queue.buffer[lastIdx];
+
+        *pBegin = first->pkSerialNumber;
+        *pEnd   = last->pkSerialNumber;
+    }
+
+    LeaveCriticalSection(&g_lock);
+    return TRUE;
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  reason, LPVOID lpReserved) {
-    if (reason == DLL_PROCESS_DETACH) {
-        close_log();
-        return TRUE;
+    switch (reason) {
+        case DLL_PROCESS_ATTACH:
+            init_log();
+            log_str("DllMain: DLL_PROCESS_ATTACH received.\n");
+            break;
+        case DLL_THREAD_ATTACH:
+        case DLL_THREAD_DETACH:
+            break;
+        case DLL_PROCESS_DETACH:
+            log_str("DllMain: DLL_PROCESS_DETACH received.\n");
+            close_log();
+            break;
     }
-    if (reason == DLL_PROCESS_ATTACH) {
-        init_log();
-        return TRUE;
-    }
-    return FALSE;
+    return TRUE; // Always return TRUE from DllMain
 }
