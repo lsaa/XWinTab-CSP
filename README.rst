@@ -15,9 +15,9 @@ To build it yourself, you will also need to install the following packages: ``li
 
 Installation
 ------------
-1. With Rebelle already installed, copy **BOTH** ``wintab32.dll`` and ``XWinTabHelper.dll.so`` into the installation directory (the one with the exe).
+1. Copy **BOTH** ``wintab32.dll`` and ``XWinTabHelper.dll.so`` into the installation directory (the one with the exe).
 2. Add a DLL Override for ``wintab32.dll`` (needed for it to be loaded instead of the built-in one).
-3. Configure Rebelle to use the ``Wacom Compatible (wintab)`` option.
+3. Configure the application to use the ``Wacom Compatible (wintab)`` option.
 
 Additional
 ----------
