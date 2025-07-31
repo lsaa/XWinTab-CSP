@@ -1,9 +1,9 @@
 XWinTab: tablet input for Rebelle running on Wine.
 ==================================================
 
-Wine's built-in implementation of wintab does not work with Rebelle. XWinTab works around this by having Rebelle load it instead and creates its own connection to X11.
+Wine's built-in implementation of wintab does not work with Rebelle, CSP and Drawpile. XWinTab works around this by having the applications load it instead and creates its own connection to X11.
 
-This software is experimental and has not been tested extensively.
+This software is experimental and has not been tested extensively. Also, X11 exclusive.
 
 Requirements
 ------------
@@ -15,7 +15,7 @@ To build it yourself, you will also need to install the following packages: ``li
 
 Installation
 ------------
-1. With Rebelle already installed, copy **BOTH** ``wintab32.dll`` and ``XWinTabHelper.dll.so`` into the installation directory (the one with the ``Rebelle 7.exe``).
+1. With Rebelle already installed, copy **BOTH** ``wintab32.dll`` and ``XWinTabHelper.dll.so`` into the installation directory (the one with the exe).
 2. Add a DLL Override for ``wintab32.dll`` (needed for it to be loaded instead of the built-in one).
 3. Configure Rebelle to use the ``Wacom Compatible (wintab)`` option.
 
